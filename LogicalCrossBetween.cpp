@@ -80,36 +80,37 @@ namespace scidb
  *   - The operator only works if the size of the rangesArray is very small.
  *
  */
-class LogicalCrossBetween: public  LogicalOperator
+class LogicalCrossBetween_: public  LogicalOperator
 {
   public:
-	LogicalCrossBetween(const std::string& logicalName, const std::string& alias) : LogicalOperator(logicalName, alias)
+	LogicalCrossBetween_(const std::string& logicalName, const std::string& alias) : LogicalOperator(logicalName, alias)
 	{
         ADD_PARAM_INPUT()
-        ADD_PARAM_INPUT()
+        ADD_PARAM_VARIES()
 	}
 
-    ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
+	std::vector<std::shared_ptr<OperatorParamPlaceholder> > nextVaryParamPlaceholder(const std::vector<ArrayDesc> &schemas)
 	{
-		assert(schemas.size() == 2);
+		std::vector<std::shared_ptr<OperatorParamPlaceholder> > res;
+		size_t i = _parameters.size();
+		Dimensions const& dims = schemas[0].getDimensions();
+		size_t nDims = dims.size();
+		if (i > 0 && i % (nDims*2) == 0) {// possible end of parameters at end of each dimension set; must have at least one set
+			res.push_back(END_OF_VARIES_PARAMS());
+			res.push_back(PARAM_CONSTANT(TID_INT64));
+		} else 
+			res.push_back(PARAM_CONSTANT(TID_INT64));
+		return res;
+	}
 
-		// verify that rangesArray has (|srcDims| * 2) attributes all having type int64.
-		const Dimensions& dimsSrcArray = schemas[0].getDimensions();
-		const bool excludeEmptyBitmap = true;
-		const Attributes& attrsRangesArray = schemas[1].getAttributes(excludeEmptyBitmap);
-		if (dimsSrcArray.size()*2 != attrsRangesArray.size()) {
-		    throw USER_EXCEPTION(SCIDB_SE_OPERATOR, SCIDB_LE_CROSSBETWEEN_NUM_ATTRIBUTES_MISMATCH);
-		}
-		for (size_t i=0; i<attrsRangesArray.size(); ++i) {
-		    if (attrsRangesArray[i].getType() != TID_INT64 ) {
-		        throw USER_EXCEPTION(SCIDB_SE_OPERATOR, SCIDB_LE_CROSSBETWEEN_RANGES_ARRAY_ATTRIBUTE_NOT_INT64);
-		    }
-		}
-        return addEmptyTagAttribute(schemas[0]);
+	ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
+	{
+		assert(schemas.size() == 1);		//only 1 array as input
+		return addEmptyTagAttribute(schemas[0]);
 	}
 };
 
-REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalCrossBetween, "cross_between_");
+REGISTER_LOGICAL_OPERATOR_FACTORY(LogicalCrossBetween_, "cross_between_");
 
 
 }  // namespace scidb

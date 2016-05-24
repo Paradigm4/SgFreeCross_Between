@@ -40,15 +40,25 @@ else
  endif
 endif
 
-all:
+libsgf_cross_between.so: plugin.cpp.o LogicalCrossBetween.cpp.o PhysicalCrossBetween.cpp.o
 	@if test ! -d "$(SCIDB)"; then echo  "Error. Try:\n\nmake SCIDB=<PATH TO SCIDB INSTALL PATH>"; exit 1; fi
-	$(CXX) $(CFLAGS) $(INC) -o libsgf_cross_between.so plugin.cpp LogicalCrossBetween.cpp PhysicalCrossBetween.cpp $(LIBS)
+	  
+	$(CXX) $(CFLAGS) $(INC) -o libsgf_cross_between.so plugin.cpp.o LogicalCrossBetween.cpp.o PhysicalCrossBetween.cpp.o $(LIBS)
 	@echo "Now copy *.so to your SciDB lib/scidb/plugins directory"
 	@echo "Remember to copy the plugin to all your nodes in the cluster."
 	@echo "Now run..."
-	@echo "iquery -aq \"load_library('cross_between')\" # to load the plugin."
+	@echo "iquery -aq \"load_library('sgf_cross_between')\" # to load the plugin."
 	@echo
 	@echo "Re-start SciDB if the plugin was already loaded previously."
+
+plugin.cpp.o:
+	$(CXX) $(CFLAGS) $(INC) -o plugin.cpp.o -c plugin.cpp
+
+LogicalCrossBetween.cpp.o:
+	$(CXX) $(CFLAGS) $(INC) -o LogicalCrossBetween.cpp.o -c LogicalCrossBetween.cpp
+
+PhysicalCrossBetween.cpp.o:
+	$(CXX) $(CFLAGS) $(INC) -o PhysicalCrossBetween.cpp.o -c PhysicalCrossBetween.cpp
 
 clean:
 	rm -f *.so *.o

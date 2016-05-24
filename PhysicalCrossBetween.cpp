@@ -23,8 +23,8 @@
 /*
  * PhysicalCrossBetween.cpp
  *
- *  Created on: August 15, 2014
- *  Author: Donghui Zhang
+ *  Created on: May, 2016
+ *  Author: Kriti Sen Sharma
  */
 
 #include <query/Operator.h>
@@ -35,18 +35,56 @@
 
 namespace scidb {
 
-class PhysicalCrossBetween: public  PhysicalOperator
+class PhysicalCrossBetween_: public  PhysicalOperator
 {
 public:
-    PhysicalCrossBetween(const std::string& logicalName, const std::string& physicalName, const Parameters& parameters, const ArrayDesc& schema):
+    PhysicalCrossBetween_(const std::string& logicalName, const std::string& physicalName, const Parameters& parameters, const ArrayDesc& schema):
          PhysicalOperator(logicalName, physicalName, parameters, schema)
     {
     }
 
     virtual PhysicalBoundaries getOutputBoundaries(const std::vector<PhysicalBoundaries> & inputBoundaries,
-                                                  const std::vector< ArrayDesc> & inputSchemas) const
+                                                  const std::vector< ArrayDesc> & inputSchemas) const //TODO: potential optimization (?) by comparing with corresponding code in `between` operator
     {
        return inputBoundaries[0];
+    }
+
+    Coordinates getWindowStart(Dimensions const& dims, const size_t offset) const
+    {
+        size_t nDims = dims.size();
+        Coordinates result(nDims);
+        for (size_t i = 0; i < nDims; i++)
+        {
+            Value const& coord = ((std::shared_ptr<OperatorParamPhysicalExpression>&)_parameters[i + offset])->getExpression()->evaluate();
+            if ( coord.isNull() || coord.get<int64_t>() < dims[i].getStartMin())
+            {
+                result[i] = dims[i].getStartMin();
+            }
+            else
+            {
+                result[i] = coord.get<int64_t>();
+            }
+        }
+        return result;
+    }
+
+    Coordinates getWindowEnd(Dimensions const& dims, const size_t offset) const
+    {
+        size_t nDims = dims.size();
+        Coordinates result(nDims);
+        for (size_t i = 0; i < nDims; i++)
+        {
+            Value const& coord = ((std::shared_ptr<OperatorParamPhysicalExpression>&)_parameters[i + offset + nDims])->getExpression()->evaluate();
+            if (coord.isNull() || coord.getInt64() > dims[i].getEndMax())
+            {
+                result[i] = dims[i].getEndMax();
+            }
+            else
+            {
+                result[i] = coord.getInt64();
+            }
+        }
+        return result;
     }
 
     /***
@@ -56,53 +94,30 @@ public:
     std::shared_ptr< Array> execute(std::vector< std::shared_ptr< Array> >& inputArrays,
                                       std::shared_ptr<Query> query)
     {
-        // Ensure inputArray supports random access, and rangesArray is replicated.
-        assert(inputArrays.size() == 2);
+        assert(inputArrays.size() == 1);
         std::shared_ptr<Array> inputArray = ensureRandomAccess(inputArrays[0], query);
-        std::shared_ptr<Array> rangesArray = redistributeToRandomAccess(inputArrays[1], query, psReplication,
-                                                                   ALL_INSTANCE_MASK,
-                                                                   std::shared_ptr<CoordinateTranslator>(),
-                                                                   0,
-                                                                   std::shared_ptr<PartitioningSchemaData>());
 
         // Some variables.
         SchemaUtils schemaUtilsInputArray(inputArray);
-        SchemaUtils schemaUtilsRangesArray(rangesArray);
-        size_t nDims = schemaUtilsInputArray._dims.size();
-        assert(nDims*2 == schemaUtilsRangesArray._attrsWithoutET.size());
+        Dimensions const& dims = schemaUtilsInputArray._dims;
+        size_t nDims = dims.size();
+        int64_t result;
+        size_t nParams = _parameters.size();
+        assert(nParams > 0 && nParams % (nDims*2) == 0); // assert that you have non-zero list of params,
+        													// and that the number of parameters is a multiple of (nDims*2)
 
         // Scan all attributes of the rangesArray simultaneously, and fill in spatialRanges.
         // Set up a MultiConstIterators to process the array iterators simultaneously.
         SpatialRangesPtr spatialRangesPtr = make_shared<SpatialRanges>(nDims);
 
-        vector<std::shared_ptr<ConstIterator> > rangesArrayIters(nDims*2);
-        for (size_t i=0; i<nDims*2; ++i) {
-            rangesArrayIters[i] = rangesArray->getConstIterator(i);
-        }
-        MultiConstIterators multiItersRangesArray(rangesArrayIters);
-        while (!multiItersRangesArray.end()) {
-            // Set up a MultiConstIterators to process the chunk iterators simultaneously.
-            vector<std::shared_ptr<ConstIterator> > rangesChunkIters(nDims*2);
-            for (size_t i=0; i<nDims*2; ++i) {
-                rangesChunkIters[i] = dynamic_pointer_cast<ConstArrayIterator>(rangesArrayIters[i])->getChunk().getConstIterator();
+		SpatialRange spatialRange(nDims);
+        for (size_t i=0; i<nParams/(nDims*2); ++i) {
+        	size_t offset = i*(nDims*2);
+        	Coordinates lowPos = getWindowStart(dims, offset);
+        	Coordinates highPos = getWindowEnd(dims, offset);
+            if (isDominatedBy(lowPos, highPos)) {
+                spatialRangesPtr->_ranges.push_back(SpatialRange(lowPos, highPos));
             }
-            MultiConstIterators multiItersRangesChunk(rangesChunkIters);
-            while (!multiItersRangesChunk.end()) {
-                SpatialRange spatialRange(nDims);
-                for (size_t i=0; i<nDims; ++i) {
-                    const Value& v = dynamic_pointer_cast<ConstChunkIterator>(rangesChunkIters[i])->getItem();
-                    spatialRange._low[i] = v.getInt64();
-                }
-                for (size_t i=nDims; i<nDims*2; ++i) {
-                    const Value& v = dynamic_pointer_cast<ConstChunkIterator>(rangesChunkIters[i])->getItem();
-                    spatialRange._high[i-nDims] = v.getInt64();
-                }
-                if (spatialRange.valid()) {
-                    spatialRangesPtr->_ranges.push_back(spatialRange);
-                }
-                ++ multiItersRangesChunk;
-            }
-            ++ multiItersRangesArray;
         }
 
         // Return a CrossBetweenArray.
@@ -110,6 +125,6 @@ public:
    }
 };
 
-REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalCrossBetween, "cross_between_", "physicalCrossBetween");
+REGISTER_PHYSICAL_OPERATOR_FACTORY(PhysicalCrossBetween_, "cross_between_", "PhysicalCrossBetween_");
 
 }  // namespace scidb
