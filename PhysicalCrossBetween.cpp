@@ -110,15 +110,16 @@ public:
         // Set up a MultiConstIterators to process the array iterators simultaneously.
         SpatialRangesPtr spatialRangesPtr = make_shared<SpatialRanges>(nDims);
 
-		SpatialRange spatialRange(nDims);
+		    SpatialRange spatialRange(nDims);
         for (size_t i=0; i<nParams/(nDims*2); ++i) {
         	size_t offset = i*(nDims*2);
         	Coordinates lowPos = getWindowStart(dims, offset);
         	Coordinates highPos = getWindowEnd(dims, offset);
             if (isDominatedBy(lowPos, highPos)) {
-                spatialRangesPtr->_ranges.push_back(SpatialRange(lowPos, highPos));
+                spatialRangesPtr->insert(SpatialRange(lowPos, highPos));
             }
         }
+        spatialRangesPtr->buildIndex();
 
         // Return a CrossBetweenArray.
         return std::shared_ptr< Array>(make_shared<BetweenArray>(_schema, spatialRangesPtr, inputArray));
