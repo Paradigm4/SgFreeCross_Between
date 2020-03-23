@@ -27,7 +27,7 @@
  *  Author: Donghui Zhang
  */
 
-#include <query/Operator.h>
+#include <query/LogicalOperator.h>
 #include <system/Exceptions.h>
 
 namespace scidb
@@ -85,28 +85,29 @@ class LogicalCrossBetween_: public  LogicalOperator
   public:
 	LogicalCrossBetween_(const std::string& logicalName, const std::string& alias) : LogicalOperator(logicalName, alias)
 	{
-        ADD_PARAM_INPUT()
-        ADD_PARAM_VARIES()
+        _properties.dataframe = false; // Dataframe input not allowed.
 	}
 
-	std::vector<std::shared_ptr<OperatorParamPlaceholder> > nextVaryParamPlaceholder(const std::vector<ArrayDesc> &schemas)
-	{
-		std::vector<std::shared_ptr<OperatorParamPlaceholder> > res;
-		size_t i = _parameters.size();
-		Dimensions const& dims = schemas[0].getDimensions();
-		size_t nDims = dims.size();
-		if (i > 0 && i % (nDims*2) == 0) {// possible end of parameters at end of each dimension set; must have at least one set
-			res.push_back(END_OF_VARIES_PARAMS());
-			res.push_back(PARAM_CONSTANT(TID_INT64));
-		} else 
-			res.push_back(PARAM_CONSTANT(TID_INT64));
-		return res;
-	}
+    static PlistSpec const* makePlistSpec()
+    {
+        static PlistSpec argSpec {
+            { "", // positionals
+              RE(RE::LIST, {
+                     RE(PP(PLACEHOLDER_INPUT)),
+                     RE(RE::PLUS, {
+                             RE(PP(PLACEHOLDER_CONSTANT, TID_INT64)),
+                             RE(PP(PLACEHOLDER_CONSTANT, TID_INT64))
+                     })
+                 })
+            }
+        };
+        return &argSpec;
+    }
 
 	ArrayDesc inferSchema(std::vector< ArrayDesc> schemas, std::shared_ptr< Query> query)
 	{
 		assert(schemas.size() == 1);		//only 1 array as input
-		return addEmptyTagAttribute(schemas[0]);
+		return schemas[0].addEmptyTagAttribute();
 	}
 };
 

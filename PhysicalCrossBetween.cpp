@@ -27,7 +27,7 @@
  *  Author: Kriti Sen Sharma
  */
 
-#include <query/Operator.h>
+#include <query/PhysicalOperator.h>
 #include <array/Metadata.h>
 #include <array/Array.h>
 #include "BetweenArray.h"
