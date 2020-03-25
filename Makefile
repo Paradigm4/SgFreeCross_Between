@@ -37,12 +37,18 @@ else
   CC := "/opt/rh/devtoolset-3/root/usr/bin/gcc"
   CXX := "/opt/rh/devtoolset-3/root/usr/bin/g++"
   CFLAGS+=-std=c++14 -DCPP11
+ else
+  GCC_VER_5 := $(shell echo `gcc -dumpversion | cut -f1-2 -d.` \>= 5 | bc )
+  $(info gcc version is $(GCC_VER_5))
+	ifeq ("$(GCC_VER_5)", "1")
+		CFLAGS=-std=c++11 -std=gnu++14
+	endif
  endif
 endif
 
 libsg_free_cross_between.so: plugin.cpp.o LogicalCrossBetween.cpp.o PhysicalCrossBetween.cpp.o
 	@if test ! -d "$(SCIDB)"; then echo  "Error. Try:\n\nmake SCIDB=<PATH TO SCIDB INSTALL PATH>"; exit 1; fi
-	  
+
 	$(CXX) $(CFLAGS) $(INC) -o libsg_free_cross_between.so plugin.cpp.o LogicalCrossBetween.cpp.o PhysicalCrossBetween.cpp.o $(LIBS)
 	@echo "Now copy *.so to your SciDB lib/scidb/plugins directory"
 	@echo "Remember to copy the plugin to all your nodes in the cluster."

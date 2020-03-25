@@ -108,7 +108,7 @@ public:
 
         // Scan all attributes of the rangesArray simultaneously, and fill in spatialRanges.
         // Set up a MultiConstIterators to process the array iterators simultaneously.
-        SpatialRangesPtr spatialRangesPtr = make_shared<SpatialRanges>(nDims);
+        SpatialRangesPtr spatialRangesPtr = std::make_shared<SpatialRanges>(nDims);
 
 		    SpatialRange spatialRange(nDims);
         for (size_t i=0; i<nParams/(nDims*2); ++i) {
@@ -122,7 +122,7 @@ public:
         spatialRangesPtr->buildIndex();
 
         // Return a CrossBetweenArray.
-        return std::shared_ptr< Array>(make_shared<BetweenArray>(_schema, spatialRangesPtr, inputArray));
+        return std::shared_ptr< Array>(std::make_shared<BetweenArray>(_schema, spatialRangesPtr, inputArray));
    }
 };
 
